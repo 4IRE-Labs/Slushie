@@ -1,7 +1,7 @@
 [package]
 name = "Slushie"
 version = "0.1.0"
-authors = ["4IRE <hp@4irelabs.com>"]
+authors = ["4IRE <info@4irelabs.com>"]
 edition = "2021"
 
 [dependencies]
