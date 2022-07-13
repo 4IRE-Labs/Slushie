@@ -73,7 +73,7 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
     }
 
     ///Insert leaf in the merkle tree
-    pub fn insert(&mut self, leaf: &[u8]) -> Result<usize, MerkleTreeError> {
+    pub fn insert(&mut self, leaf: [u8; 32]) -> Result<usize, MerkleTreeError> {
         let next_index = self.next_index as usize;
 
         if self.next_index == 2u64.pow(DEPTH as u32) {
@@ -81,7 +81,7 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
         }
 
         let mut current_index = next_index;
-        let mut current_hash = Self::hash_leaf(leaf);
+        let mut current_hash = leaf;
 
         for i in 0..DEPTH {
             let left;
@@ -122,14 +122,6 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
     fn hash_left_right(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
         let mut result = [0; 32];
         Blake2x256::hash(&[left, right].concat(), &mut result);
-
-        result
-    }
-
-    /// Calculate hash for provided leaf
-    fn hash_leaf(leaf: &[u8]) -> [u8; 32] {
-        let mut result = [0; 32];
-        Blake2x256::hash(leaf, &mut result);
 
         result
     }
@@ -251,7 +243,7 @@ mod tests {
         let mut tree = MerkleTree::<10>::new().unwrap();
         assert_eq!(tree.get_last_root(), ZEROS[9]);
 
-        tree.insert(b"11").unwrap();
+        tree.insert([4; 32]).unwrap();
 
         assert!(tree.is_known_root(ZEROS[9]));
         assert!(!tree.is_known_root(ZEROS[4]));
@@ -264,7 +256,7 @@ mod tests {
         let mut tree = MerkleTree::<2>::new().unwrap();
 
         for i in 0..4usize {
-            let index = tree.insert(&i.to_be_bytes()).unwrap();
+            let index = tree.insert([i as u8; 32]).unwrap();
             assert_eq!(i, index);
             assert_eq!(i + 1, tree.next_index as usize);
         }
@@ -275,10 +267,10 @@ mod tests {
         let mut tree = MerkleTree::<3>::new().unwrap();
 
         for i in 0..2usize.pow(3) {
-            tree.insert(&i.to_be_bytes()).unwrap();
+            tree.insert([i as u8 + 1; 32]).unwrap();
         }
 
-        let err = tree.insert(&2usize.to_be_bytes());
+        let err = tree.insert([6; 32]);
 
         assert_eq!(err, Err(MerkleTreeError::MerkleTreeIsFull));
     }
@@ -297,7 +289,7 @@ mod tests {
         let mut known_roots = vec![ZEROS[9]];
 
         for i in 0..6 {
-            tree.insert(&[i; 32]).unwrap();
+            tree.insert([i as u8 * 2; 32]).unwrap();
             let known_root = tree.get_last_root();
 
             known_roots.push(known_root);
@@ -315,7 +307,7 @@ mod tests {
         let mut roots = vec![ZEROS[5]];
 
         for i in 0..10 {
-            tree.insert(&[i; 32]).unwrap();
+            tree.insert([i as u8 * 3; 32]).unwrap();
             let root = tree.get_last_root();
 
             roots.push(root);
@@ -329,7 +321,7 @@ mod tests {
     fn test_check_zeros_correctness() {
         let mut tree = MerkleTree::<MAX_DEPTH>::new().unwrap();
         for _i in 0..2u64.pow(MAX_DEPTH as u32) {
-            tree.insert(&[0; 32]).unwrap();
+            tree.insert([0; 32]).unwrap();
         }
 
         for i in 0..MAX_DEPTH {
