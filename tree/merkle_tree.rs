@@ -33,7 +33,7 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
         roots.push(ZEROS[DEPTH - 1]);
 
         let mut filled_subtrees = Vec::with_capacity(DEPTH);
-        filled_subtrees.extend_from_slice(&ZEROS[0..DEPTH+1]);
+        filled_subtrees.extend_from_slice(&ZEROS[0..DEPTH + 1]);
 
         Ok(Self {
             current_root_index: 0,
@@ -146,7 +146,10 @@ pub(crate) enum MerkleTreeError {
 
 ///Array with zero elements for a MerkleTree with Blake2x256
 const ZEROS: [[u8; 32]; 21] = [
-    [137, 235, 13, 106, 138, 105, 29, 174, 44, 209, 94, 208, 54, 153, 49, 206, 10, 148, 158, 202, 250, 92, 63, 147, 248, 18, 24, 51, 100, 110, 21, 195],
+    [
+        137, 235, 13, 106, 138, 105, 29, 174, 44, 209, 94, 208, 54, 153, 49, 206, 10, 148, 158,
+        202, 250, 92, 63, 147, 248, 18, 24, 51, 100, 110, 21, 195,
+    ],
     [
         104, 168, 125, 50, 87, 8, 160, 41, 67, 148, 125, 45, 203, 108, 96, 86, 17, 230, 85, 13,
         194, 93, 167, 225, 221, 12, 48, 84, 247, 118, 182, 25,
@@ -285,6 +288,40 @@ mod tests {
         let tree = MerkleTree::<21>::new();
 
         assert_eq!(tree, Err(MerkleTreeError::DepthTooLong));
+    }
+
+    #[test]
+    fn test_is_known_root() {
+        let mut tree = MerkleTree::<10>::new().unwrap();
+
+        let mut known_roots = vec![ZEROS[9]];
+
+        for i in 0..6 {
+            tree.insert(&[i; 32]).unwrap();
+            let known_root = tree.get_last_root();
+
+            known_roots.push(known_root);
+        }
+
+        for root in &known_roots {
+            assert!(tree.is_known_root(*root));
+        }
+    }
+
+    #[test]
+    fn test_roots_field() {
+        let mut tree = MerkleTree::<6>::new().unwrap();
+
+        let mut roots = vec![ZEROS[5]];
+
+        for i in 0..10 {
+            tree.insert(&[i; 32]).unwrap();
+            let root = tree.get_last_root();
+
+            roots.push(root);
+        }
+
+        assert_eq!(tree.roots, roots);
     }
 
     #[ignore]
