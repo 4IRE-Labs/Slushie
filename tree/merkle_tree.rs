@@ -9,7 +9,7 @@ pub const ROOT_HISTORY_SIZE: u64 = 30;
 pub const MAX_DEPTH: usize = 20;
 
 ///Merkle tree with history for storing commitments in it
-#[derive(scale::Encode, scale::Decode, PackedLayout, SpreadLayout)]
+#[derive(scale::Encode, scale::Decode, PackedLayout, SpreadLayout, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug, scale_info::TypeInfo, StorageLayout))]
 pub(crate) struct MerkleTree<const DEPTH: usize> {
     ///Current root index in the history
@@ -32,10 +32,13 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
         let mut roots = Vec::with_capacity(ROOT_HISTORY_SIZE as usize);
         roots.push(ZEROS[DEPTH - 1]);
 
+        let mut filled_subtrees = Vec::with_capacity(DEPTH);
+        filled_subtrees.extend_from_slice(&ZEROS[0..DEPTH+1]);
+
         Ok(Self {
             current_root_index: 0,
             next_index: 0,
-            filled_subtrees: Vec::new(),
+            filled_subtrees,
             roots,
         })
     }
@@ -140,7 +143,9 @@ pub(crate) enum MerkleTreeError {
     DepthTooLong,
 }
 
-const ZEROS: [[u8; 32]; 20] = [
+///Array with zero elements for a MerkleTree with Blake2x256
+const ZEROS: [[u8; 32]; 21] = [
+    [137, 235, 13, 106, 138, 105, 29, 174, 44, 209, 94, 208, 54, 153, 49, 206, 10, 148, 158, 202, 250, 92, 63, 147, 248, 18, 24, 51, 100, 110, 21, 195],
     [
         104, 168, 125, 50, 87, 8, 160, 41, 67, 148, 125, 45, 203, 108, 96, 86, 17, 230, 85, 13,
         194, 93, 167, 225, 221, 12, 48, 84, 247, 118, 182, 25,
