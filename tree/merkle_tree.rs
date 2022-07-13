@@ -54,21 +54,14 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
             return false;
         }
 
-        let mut i = self.current_root_index;
-
-        loop {
-            if root == self.roots.get(i as usize).copied().unwrap_or([0; 32]) {
+        for i in 0..ROOT_HISTORY_SIZE{
+            let current_index = ((ROOT_HISTORY_SIZE + self.current_root_index - i) % ROOT_HISTORY_SIZE) as usize;
+            
+            if root == self.roots.get(current_index).copied().unwrap_or([0; 32]) {
                 return true;
             }
-            if i == 0 {
-                i = ROOT_HISTORY_SIZE;
-            }
-            i -= 1;
-            if i == self.current_root_index {
-                break;
-            }
         }
-
+        
         false
     }
 
