@@ -80,12 +80,13 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
             return Err(MerkleTreeError::MerkleTreeIsFull);
         }
 
-        let mut left = [0; 32];
-        let mut right = [0; 32];
         let mut current_index = next_index;
         let mut current_hash = Self::hash_leaf(leaf);
 
         for i in 0..DEPTH {
+            let left;
+            let right;
+
             if current_index % 2 == 0 {
                 right = ZEROS[i];
                 left = current_hash;
