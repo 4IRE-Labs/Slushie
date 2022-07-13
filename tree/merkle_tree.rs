@@ -25,8 +25,12 @@ pub(crate) struct MerkleTree<const DEPTH: usize> {
 impl<const DEPTH: usize> MerkleTree<DEPTH> {
     ///Create merkle tree
     pub fn new() -> Result<Self, MerkleTreeError> {
-        if DEPTH > MAX_DEPTH || DEPTH == 0 {
+        if DEPTH > MAX_DEPTH {
             return Err(MerkleTreeError::DepthTooLong);
+        }
+
+        if DEPTH == 0 {
+            return Err(MerkleTreeError::DepthIsZero);
         }
 
         let mut roots = Vec::with_capacity(ROOT_HISTORY_SIZE as usize);
@@ -54,14 +58,15 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
             return false;
         }
 
-        for i in 0..ROOT_HISTORY_SIZE{
-            let current_index = ((ROOT_HISTORY_SIZE + self.current_root_index - i) % ROOT_HISTORY_SIZE) as usize;
-            
+        for i in 0..ROOT_HISTORY_SIZE {
+            let current_index =
+                ((ROOT_HISTORY_SIZE + self.current_root_index - i) % ROOT_HISTORY_SIZE) as usize;
+
             if root == self.roots.get(current_index).copied().unwrap_or([0; 32]) {
                 return true;
             }
         }
-        
+
         false
     }
 
@@ -127,6 +132,8 @@ pub(crate) enum MerkleTreeError {
     MerkleTreeIsFull,
     ///Depth should be in range 1..MAX_DEPTH
     DepthTooLong,
+    ///Depth can not be 0
+    DepthIsZero,
 }
 
 ///Array with zero elements for a MerkleTree with Blake2x256
@@ -273,6 +280,13 @@ mod tests {
         let tree = MerkleTree::<21>::new();
 
         assert_eq!(tree, Err(MerkleTreeError::DepthTooLong));
+    }
+
+    #[test]
+    fn test_error_when_tree_depth_is_0() {
+        let tree = MerkleTree::<0>::new();
+
+        assert_eq!(tree, Err(MerkleTreeError::DepthIsZero));
     }
 
     #[test]
