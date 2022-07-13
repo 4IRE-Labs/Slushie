@@ -228,4 +228,74 @@ const ZEROS: [[u8; 32]; 21] = [
     ],
 ];
 
-//TODO tests
+#[cfg(any(feature = "std", tests))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_zero_root() {
+        let tree = MerkleTree::<7>::new().unwrap();
+        assert_eq!(tree.get_last_root(), ZEROS[6]);
+
+        for i in 0..7 {
+            assert_eq!(tree.filled_subtrees[i], ZEROS[i]);
+        }
+    }
+
+    #[test]
+    fn test_insert() {
+        let mut tree = MerkleTree::<10>::new().unwrap();
+        assert_eq!(tree.get_last_root(), ZEROS[9]);
+
+        tree.insert(b"11").unwrap();
+
+        assert!(tree.is_known_root(ZEROS[9]));
+        assert!(!tree.is_known_root(ZEROS[4]));
+
+        assert_ne!(tree.get_last_root(), ZEROS[9]);
+    }
+
+    #[test]
+    fn test_tree_indexes() {
+        let mut tree = MerkleTree::<2>::new().unwrap();
+
+        for i in 0..4usize {
+            let index = tree.insert(&i.to_be_bytes()).unwrap();
+            assert_eq!(i, index);
+            assert_eq!(i + 1, tree.next_index as usize);
+        }
+    }
+
+    #[test]
+    fn test_error_when_tree_is_full() {
+        let mut tree = MerkleTree::<3>::new().unwrap();
+
+        for i in 0..2usize.pow(3) {
+            tree.insert(&i.to_be_bytes()).unwrap();
+        }
+
+        let err = tree.insert(&2usize.to_be_bytes());
+
+        assert_eq!(err, Err(MerkleTreeError::MerkleTreeIsFull));
+    }
+
+    #[test]
+    fn test_error_when_tree_depth_too_long() {
+        let tree = MerkleTree::<21>::new();
+
+        assert_eq!(tree, Err(MerkleTreeError::DepthTooLong));
+    }
+
+    #[ignore]
+    #[test]
+    fn test_check_zeros_correctness() {
+        let mut tree = MerkleTree::<MAX_DEPTH>::new().unwrap();
+        for _i in 0..2u64.pow(MAX_DEPTH as u32) {
+            tree.insert(&[0; 32]).unwrap();
+        }
+
+        for i in 0..MAX_DEPTH {
+            assert_eq!(tree.filled_subtrees[i], ZEROS[i]);
+        }
+    }
+}
