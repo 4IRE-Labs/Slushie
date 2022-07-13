@@ -10,7 +10,7 @@ pub const MAX_DEPTH: usize = 20;
 
 ///Merkle tree with history for storing commitments in it
 #[derive(scale::Encode, scale::Decode, PackedLayout, SpreadLayout, PartialEq)]
-#[cfg_attr(feature = "std", derive(Debug, scale_info::TypeInfo, StorageLayout))]
+#[cfg_attr(feature = "std", derive(Debug, StorageLayout))]
 pub(crate) struct MerkleTree<const DEPTH: usize> {
     ///Current root index in the history
     pub current_root_index: u64,
