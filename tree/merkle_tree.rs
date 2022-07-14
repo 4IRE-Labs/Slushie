@@ -38,7 +38,7 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
         roots.push(ZEROS[DEPTH - 1]);
 
         let mut filled_subtrees = Vec::with_capacity(DEPTH);
-        filled_subtrees.extend_from_slice(&ZEROS[0..DEPTH + 1]);
+        filled_subtrees.extend_from_slice(&ZEROS[0..DEPTH]);
 
         Ok(Self {
             current_root_index: 0,
