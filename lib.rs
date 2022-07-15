@@ -15,12 +15,12 @@ mod Slushie {
     const MY_MAX_DEPTH: usize = MAX_DEPTH - 1;
 
     #[ink(storage)]
-    //#[derive(ink_storage::traits::SpreadAllocate)]
+    #[derive(ink_storage::traits::SpreadAllocate)]
     pub struct Slushie {
         // FIXME: merkle_tree: MerkleTree<MAX_DEPTH>,
         merkle_tree: MerkleTree<MY_MAX_DEPTH>,
         deposit_size: Balance,
-        // FIXME: used_nullifiers: ink_storage::Mapping<PoseidonHash, bool>,
+        used_nullifiers: ink_storage::Mapping<PoseidonHash, bool>,
     }
 
     #[ink(event)]
@@ -46,7 +46,9 @@ mod Slushie {
         MerkleTreeIsFull,
         InvalidTransferredAmount,
         WithdrawalFailure,
-        AlreadyWithdrawen,
+        WithdrawalFailure_InvalidDepositSize,
+        WithdrawalFailure_InsufficientFunds,
+        WithdrawalFailure_NullifierAlreadyUsed,
         UnknownRoot,
     }
 
@@ -55,9 +57,12 @@ mod Slushie {
     impl Slushie {
         #[ink(constructor)]
         pub fn new(deposit_size: Balance) -> Self {
-            Self { merkle_tree: MerkleTree::<MY_MAX_DEPTH>::new().unwrap(), // FIXME: MY_MAX_DEPTH
-                   deposit_size,
-                 }
+            ink::utils::initialize_contract(|me: &mut Self| {
+                *me = Self { merkle_tree: MerkleTree::<MY_MAX_DEPTH>::new().unwrap(), // FIXME: MY_MAX_DEPTH
+                    deposit_size,
+                    used_nullifiers: Default::default(),
+                };
+            })
         }
 
         #[ink(message, payable)]
@@ -81,29 +86,28 @@ mod Slushie {
                     timestamp: self.env().block_timestamp(),
                 });
 
-            // FIXME: used_hashes[hash] = true;
-
             Ok(self.merkle_tree.get_last_root() as PoseidonHash)
         }
 
         #[ink(message)]
-        pub fn withdraw(&self, hash: PoseidonHash, root: PoseidonHash) -> Result<()> {
+        pub fn withdraw(&mut self, hash: PoseidonHash, root: PoseidonHash) -> Result<()> {
             if !self.merkle_tree.is_known_root(root) {
                 return Err(Error::UnknownRoot);
             }
 
-            // FIXME: if !used_hashes[hash] { return Err(Error::AlreadyWithdrawen); }
-            // FIXME: remove hash from used_hashes
-
-            // FIXME: if nullifier (hash) is present is the Mapping -> remove from Mapping.
-
             if self.env().balance() < self.deposit_size {
-                return Err(Error::WithdrawalFailure);
+                return Err(Error::WithdrawalFailure_InsufficientFunds);
             }
 
             if self.env().transfer(self.env().caller(), self.deposit_size).is_err() {
-                return Err(Error::WithdrawalFailure);
+                return Err(Error::WithdrawalFailure_InvalidDepositSize);
             }
+
+            if self.used_nullifiers.get(hash).is_some() {
+                return Err(Error::WithdrawalFailure_NullifierAlreadyUsed);
+            }
+
+            self.used_nullifiers.insert(hash, &true);
 
             self.env().emit_event(
                 WithdrawEvent {
