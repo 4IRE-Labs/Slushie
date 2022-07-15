@@ -10,15 +10,11 @@ mod Slushie {
     use crate::tree::merkle_tree::{MerkleTree, MerkleTreeError, MAX_DEPTH};
 
     type PoseidonHash = [u8; 32];
-    const ZERO_HASH: [u8; 32] = [0; 32];
-
-    const MY_MAX_DEPTH: usize = MAX_DEPTH - 1;
 
     #[ink(storage)]
     #[derive(ink_storage::traits::SpreadAllocate)]
     pub struct Slushie {
-        // FIXME: merkle_tree: MerkleTree<MAX_DEPTH>,
-        merkle_tree: MerkleTree<MY_MAX_DEPTH>,
+        merkle_tree: MerkleTree<MAX_DEPTH>,
         deposit_size: Balance,
         used_nullifiers: ink_storage::Mapping<PoseidonHash, bool>,
     }
@@ -58,7 +54,7 @@ mod Slushie {
         #[ink(constructor)]
         pub fn new(deposit_size: Balance) -> Self {
             ink::utils::initialize_contract(|me: &mut Self| {
-                *me = Self { merkle_tree: MerkleTree::<MY_MAX_DEPTH>::new().unwrap(), // FIXME: MY_MAX_DEPTH
+                *me = Self { merkle_tree: MerkleTree::<MAX_DEPTH>::new().unwrap(),
                     deposit_size,
                     used_nullifiers: Default::default(),
                 };
