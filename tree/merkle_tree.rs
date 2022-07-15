@@ -1,10 +1,7 @@
 use hex_literal::hex;
 use ink_env::hash::{Blake2x256, CryptoHash};
-use ink_prelude::vec::Vec;
-use ink_storage::traits::{PackedLayout, SpreadLayout, StorageLayout};
-
-/// Merkle tree history size
-pub const ROOT_HISTORY_SIZE: u64 = 30;
+use ink_primitives::KeyPtr;
+use ink_storage::traits::{ExtKeyPtr, PackedLayout, SpreadLayout, StorageLayout};
 
 /// Merkle tree maximum depth
 pub const MAX_DEPTH: usize = 32;
@@ -12,18 +9,18 @@ pub const MAX_DEPTH: usize = 32;
 ///Merkle tree with history for storing commitments in it
 #[derive(scale::Encode, scale::Decode, PackedLayout, SpreadLayout, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug, StorageLayout))]
-pub(crate) struct MerkleTree<const DEPTH: usize> {
+pub(crate) struct MerkleTree<const DEPTH: usize, const ROOT_HISTORY_SIZE: usize> {
     ///Current root index in the history
     pub current_root_index: u64,
     /// Next leaf index
     pub next_index: u64,
     ///Hashes last filled subtrees on every level
-    pub filled_subtrees: Vec<[u8; 32]>,
+    pub filled_subtrees: Array<[u8; 32], DEPTH>,
     /// Merkle tree roots history
-    pub roots: Vec<[u8; 32]>,
+    pub roots: Array<[u8; 32], ROOT_HISTORY_SIZE>,
 }
 
-impl<const DEPTH: usize> MerkleTree<DEPTH> {
+impl<const DEPTH: usize, const ROOT_HISTORY_SIZE: usize> MerkleTree<DEPTH, ROOT_HISTORY_SIZE> {
     ///Create merkle tree
     pub fn new() -> Result<Self, MerkleTreeError> {
         if DEPTH > MAX_DEPTH {
@@ -34,11 +31,10 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
             return Err(MerkleTreeError::DepthIsZero);
         }
 
-        let mut roots = Vec::with_capacity(ROOT_HISTORY_SIZE as usize);
-        roots.push(ZEROS[DEPTH - 1]);
+        let roots = Array([ZEROS[DEPTH - 1]; ROOT_HISTORY_SIZE]);
 
-        let mut filled_subtrees = Vec::with_capacity(DEPTH);
-        filled_subtrees.extend_from_slice(&ZEROS[0..DEPTH]);
+        let mut filled_subtrees: Array<[u8; 32], DEPTH> = Default::default();
+        filled_subtrees.0.copy_from_slice(&ZEROS[0..DEPTH]);
 
         Ok(Self {
             current_root_index: 0,
@@ -50,7 +46,7 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
 
     /// Get last root hash
     pub fn get_last_root(&self) -> [u8; 32] {
-        self.roots[self.current_root_index as usize]
+        self.roots.0[self.current_root_index as usize]
     }
 
     /// Check existing provided root in roots history
@@ -59,11 +55,13 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
             return false;
         }
 
-        for i in 0..ROOT_HISTORY_SIZE {
-            let current_index =
-                ((ROOT_HISTORY_SIZE + self.current_root_index - i) % ROOT_HISTORY_SIZE) as usize;
+        let root_history_size_u64 = ROOT_HISTORY_SIZE as u64;
 
-            if root == self.roots.get(current_index).copied().unwrap_or([0; 32]) {
+        for i in 0..root_history_size_u64 {
+            let current_index = ((root_history_size_u64 + self.current_root_index - i)
+                % root_history_size_u64) as usize;
+
+            if root == self.roots.0[current_index] {
                 return true;
             }
         }
@@ -79,6 +77,7 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
             return Err(MerkleTreeError::MerkleTreeIsFull);
         }
 
+        let root_history_size_u64 = ROOT_HISTORY_SIZE as u64;
         let mut current_index = next_index;
         let mut current_hash = leaf;
 
@@ -90,13 +89,9 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
                 right = ZEROS[i];
                 left = current_hash;
 
-                if self.filled_subtrees.get(i).is_some() {
-                    self.filled_subtrees[i] = current_hash;
-                } else {
-                    self.filled_subtrees.push(current_hash);
-                };
+                self.filled_subtrees.0[i] = current_hash;
             } else {
-                left = self.filled_subtrees[i];
+                left = self.filled_subtrees.0[i];
                 right = current_hash;
             }
 
@@ -104,13 +99,9 @@ impl<const DEPTH: usize> MerkleTree<DEPTH> {
             current_index /= 2;
         }
 
-        self.current_root_index = (self.current_root_index + 1) % ROOT_HISTORY_SIZE;
+        self.current_root_index = (self.current_root_index + 1) % root_history_size_u64;
 
-        if self.roots.get(self.current_root_index as usize).is_some() {
-            self.roots[self.current_root_index as usize] = current_hash;
-        } else {
-            self.roots.push(current_hash);
-        };
+        self.roots.0[self.current_root_index as usize] = current_hash;
 
         self.next_index += 1;
 
@@ -137,9 +128,39 @@ pub(crate) enum MerkleTreeError {
     DepthIsZero,
 }
 
+#[derive(scale::Encode, scale::Decode, PackedLayout, SpreadLayout, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Array<T: Default + Clone + Copy, const N: usize>([T; N]);
+
+#[cfg(feature = "std")]
+use ink_metadata::layout::{ArrayLayout, Layout, LayoutKey};
+
+#[cfg(feature = "std")]
+impl<T: Default + Clone + Copy, const N: usize> StorageLayout for Array<T, N>
+where
+    T: StorageLayout + SpreadLayout,
+{
+    fn layout(key_ptr: &mut KeyPtr) -> Layout {
+        let len: u32 = N as u32;
+        let elem_footprint = <T as SpreadLayout>::FOOTPRINT;
+        Layout::Array(ArrayLayout::new(
+            LayoutKey::from(key_ptr.next_for::<[T; N]>()),
+            len,
+            elem_footprint,
+            <T as StorageLayout>::layout(&mut key_ptr.clone()),
+        ))
+    }
+}
+
+impl<T: Default + Clone + Copy, const N: usize> Default for Array<T, N> {
+    fn default() -> Self {
+        Self([Default::default(); N])
+    }
+}
+
 ///Array with zero elements(every leaf is blake2x256("slushie")) for a MerkleTree with Blake2x256
 const ZEROS: [[u8; 32]; 32] = [
-    hex!("DF26FF86CD6E61248972E4587A1676FF2DE793D9D39BA77D8623B3CF98097964"),//=blake2x256("slushie")
+    hex!("DF26FF86CD6E61248972E4587A1676FF2DE793D9D39BA77D8623B3CF98097964"), //=blake2x256("slushie")
     hex!("08A1F07AA709C548AB2FF9E131D592AD5F51AE98A422EB7DD4EC4BB5851224F7"),
     hex!("7FFD603771A2F3081DA519DD801BA92155FE3D0AEE2414F2D5F5A50A85905A9D"),
     hex!("AC6B640D0248376B1853EFF9D6EF755589EDAD57C89B418D2E769F0878714A6A"),
@@ -179,17 +200,17 @@ mod tests {
 
     #[test]
     fn test_get_zero_root() {
-        let tree = MerkleTree::<7>::new().unwrap();
+        let tree = MerkleTree::<7, 30>::new().unwrap();
         assert_eq!(tree.get_last_root(), ZEROS[6]);
 
         for i in 0..7 {
-            assert_eq!(tree.filled_subtrees[i], ZEROS[i]);
+            assert_eq!(tree.filled_subtrees.0[i], ZEROS[i]);
         }
     }
 
     #[test]
     fn test_insert() {
-        let mut tree = MerkleTree::<10>::new().unwrap();
+        let mut tree = MerkleTree::<10, 30>::new().unwrap();
         assert_eq!(tree.get_last_root(), ZEROS[9]);
 
         tree.insert([4; 32]).unwrap();
@@ -202,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_tree_indexes() {
-        let mut tree = MerkleTree::<2>::new().unwrap();
+        let mut tree = MerkleTree::<2, 30>::new().unwrap();
 
         for i in 0..4usize {
             let index = tree.insert([i as u8; 32]).unwrap();
@@ -213,7 +234,7 @@ mod tests {
 
     #[test]
     fn test_error_when_tree_is_full() {
-        let mut tree = MerkleTree::<3>::new().unwrap();
+        let mut tree = MerkleTree::<3, 30>::new().unwrap();
 
         for i in 0..2usize.pow(3) {
             tree.insert([i as u8 + 1; 32]).unwrap();
@@ -228,21 +249,21 @@ mod tests {
     fn test_error_when_tree_depth_too_long() {
         const MAX_DEPTH_PLUS_1: usize = MAX_DEPTH + 1;
 
-        let tree = MerkleTree::<MAX_DEPTH_PLUS_1>::new();
+        let tree = MerkleTree::<MAX_DEPTH_PLUS_1, 30>::new();
 
         assert_eq!(tree, Err(MerkleTreeError::DepthTooLong));
     }
 
     #[test]
     fn test_error_when_tree_depth_is_0() {
-        let tree = MerkleTree::<0>::new();
+        let tree = MerkleTree::<0, 30>::new();
 
         assert_eq!(tree, Err(MerkleTreeError::DepthIsZero));
     }
 
     #[test]
     fn test_is_known_root() {
-        let mut tree = MerkleTree::<10>::new().unwrap();
+        let mut tree = MerkleTree::<10, 30>::new().unwrap();
 
         let mut known_roots = vec![ZEROS[9]];
 
@@ -260,30 +281,31 @@ mod tests {
 
     #[test]
     fn test_roots_field() {
-        let mut tree = MerkleTree::<6>::new().unwrap();
+        let mut tree = MerkleTree::<6, 30>::new().unwrap();
 
-        let mut roots = vec![ZEROS[5]];
+        let mut roots = vec![ZEROS[5]; 30];
 
         for i in 0..10 {
             tree.insert([i as u8 * 3; 32]).unwrap();
             let root = tree.get_last_root();
+            let index = tree.current_root_index;
 
-            roots.push(root);
+            roots[index as usize] = root;
         }
 
-        assert_eq!(tree.roots, roots);
+        assert_eq!(&tree.roots.0[..], &roots[..]);
     }
 
     #[ignore]
     #[test]
     fn test_check_tree_zeros_correctness() {
-        let mut tree = MerkleTree::<MAX_DEPTH>::new().unwrap();
+        let mut tree = MerkleTree::<MAX_DEPTH, 30>::new().unwrap();
         for _i in 0..2u64.pow(MAX_DEPTH as u32) {
             tree.insert(ZEROS[0]).unwrap();
         }
 
         for i in 0..MAX_DEPTH {
-            assert_eq!(tree.filled_subtrees[i], ZEROS[i]);
+            assert_eq!(tree.filled_subtrees.0[i], ZEROS[i]);
         }
     }
 
