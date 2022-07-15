@@ -304,7 +304,7 @@ mod tests {
         let mut tree = MerkleTree::<10, 30, Poseidon>::new().unwrap();
         assert_eq!(tree.get_last_root(), Poseidon::ZEROS[9]);
 
-        tree.insert([4; 4]).unwrap();
+        tree.insert([4; 32]).unwrap();
 
         assert!(tree.is_known_root(Poseidon::ZEROS[9]));
         assert!(!tree.is_known_root(Poseidon::ZEROS[4]));
@@ -317,7 +317,7 @@ mod tests {
         let mut tree = MerkleTree::<2, 30, Poseidon>::new().unwrap();
 
         for i in 0..4usize {
-            let index = tree.insert([i as u64; 4]).unwrap();
+            let index = tree.insert([i as u8; 32]).unwrap();
             assert_eq!(i, index);
             assert_eq!(i + 1, tree.next_index as usize);
         }
@@ -328,10 +328,10 @@ mod tests {
         let mut tree = MerkleTree::<3, 30, Poseidon>::new().unwrap();
 
         for i in 0..2usize.pow(3) {
-            tree.insert([i as u64 + 1; 4]).unwrap();
+            tree.insert([i as u8; 32]).unwrap();
         }
 
-        let err = tree.insert([6; 4]);
+        let err = tree.insert([6; 32]);
 
         assert_eq!(err, Err(MerkleTreeError::MerkleTreeIsFull));
     }
@@ -359,7 +359,7 @@ mod tests {
         let mut known_roots = vec![Poseidon::ZEROS[9]];
 
         for i in 0..6 {
-            tree.insert([i as u64 * 2; 4]).unwrap();
+            tree.insert([i as u8 * 2; 32]).unwrap();
             let known_root = tree.get_last_root();
 
             known_roots.push(known_root);
@@ -377,7 +377,7 @@ mod tests {
         let mut roots = vec![Poseidon::ZEROS[5]; 30];
 
         for i in 0..10 {
-            tree.insert([i as u64 * 3; 4]).unwrap();
+            tree.insert([i as u8 * 3; 32]).unwrap();
             let root = tree.get_last_root();
             let index = tree.current_root_index;
 
@@ -404,18 +404,12 @@ mod tests {
     fn test_check_zeros_correctness_poseidon() {
         let mut result: [u8; 32] = Default::default();
         Blake2x256::hash(b"slushie", &mut result);
-        let mut result1: [u64; 4] = [0; 4];
+        let result = Poseidon::bytes_to_u64(result);
 
-        for i in 0..result1.len() {
-            let arr = result.split_at(i * 8).1.split_at(8).0;
-            let array = <&[u8; 8]>::try_from(arr).unwrap();
-            result1[i] = u64::from_be_bytes(*array);
-        }
-
-        let mut result = BlsScalar::from_raw(result1);
+        let mut result = BlsScalar::from_raw(result);
 
         for i in 0..MAX_DEPTH {
-            assert_eq!(*result.internal_repr(), Poseidon::ZEROS[i]);
+            assert_eq!(Poseidon::scalar_to_bytes(result), Poseidon::ZEROS[i]);
             result = dusk_poseidon::sponge::hash(&[result, result]);
         }
     }
