@@ -2,45 +2,116 @@
 
 use ink_lang as ink;
 
+mod tree;
+
 #[ink::contract]
 mod Slushie {
+    use super::*;
+    use crate::tree::merkle_tree::{MerkleTree, MerkleTreeError, MAX_DEPTH};
 
-    /// Defines the storage of your contract.
-    /// Add new fields to the below struct in order
-    /// to add new static storage fields to your contract.
+    type PoseidonHash = [u8; 32];
+    const ZERO_HASH: [u8; 32] = [0; 32];
+
+    const MY_MAX_DEPTH: usize = MAX_DEPTH - 1;
+
     #[ink(storage)]
+    //#[derive(ink_storage::traits::SpreadAllocate)]
     pub struct Slushie {
-        /// Stores a single `bool` value on the storage.
-        value: bool,
+        // FIXME: merkle_tree: MerkleTree<MAX_DEPTH>,
+        merkle_tree: MerkleTree<MY_MAX_DEPTH>,
+        deposit_size: Balance,
+        // FIXME: used_nullifiers: ink_storage::Mapping<PoseidonHash, bool>,
     }
 
+    #[ink(event)]
+    pub struct DepositEvent {
+        #[ink(topic)]
+        hash: PoseidonHash,
+
+        timestamp: Timestamp,
+    }
+
+    #[ink(event)]
+    pub struct WithdrawEvent {
+        #[ink(topic)]
+        hash: PoseidonHash,
+
+        timestamp: Timestamp,
+    }
+
+    #[derive(Debug, PartialEq, Eq, scale::Encode, scale::Decode)]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    pub enum Error {
+        DepositFailure,
+        MerkleTreeIsFull,
+        InvalidTransferredAmount,
+        WithdrawalFailure,
+        AlreadyWithdrawen,
+        UnknownRoot,
+    }
+
+    pub type Result<T> = core::result::Result<T, Error>;
+
     impl Slushie {
-        /// Constructor that initializes the `bool` value to the given `init_value`.
         #[ink(constructor)]
-        pub fn new(init_value: bool) -> Self {
-            Self { value: init_value }
+        pub fn new(deposit_size: Balance) -> Self {
+            Self { merkle_tree: MerkleTree::<MY_MAX_DEPTH>::new().unwrap(), // FIXME: MY_MAX_DEPTH
+                   deposit_size,
+                 }
         }
 
-        /// Constructor that initializes the `bool` value to `false`.
-        ///
-        /// Constructors can delegate to other constructors.
-        #[ink(constructor)]
-        pub fn default() -> Self {
-            Self::new(Default::default())
+        #[ink(message, payable)]
+        pub fn deposit(&mut self, hash: PoseidonHash) -> Result<PoseidonHash> {
+            let res = self.merkle_tree.insert(hash);
+            if res.is_err() {
+                // FIXME: implement From trait for MerkleTreeError;
+                match res {
+                    Err(MerkleTreeError::MerkleTreeIsFull) => return Err(Error::MerkleTreeIsFull),
+                    _ => return Err(Error::DepositFailure),
+                }
+            }
+
+            if self.env().transferred_value() != self.deposit_size {
+                return Err(Error::InvalidTransferredAmount); // FIXME: suggest a better name
+            }
+
+            self.env().emit_event(
+                DepositEvent {
+                    hash,
+                    timestamp: self.env().block_timestamp(),
+                });
+
+            // FIXME: used_hashes[hash] = true;
+
+            Ok(self.merkle_tree.get_last_root() as PoseidonHash)
         }
 
-        /// A message that can be called on instantiated contracts.
-        /// This one flips the value of the stored `bool` from `true`
-        /// to `false` and vice versa.
         #[ink(message)]
-        pub fn flip(&mut self) {
-            self.value = !self.value;
-        }
+        pub fn withdraw(&self, hash: PoseidonHash, root: PoseidonHash) -> Result<()> {
+            if !self.merkle_tree.is_known_root(root) {
+                return Err(Error::UnknownRoot);
+            }
 
-        /// Simply returns the current value of our `bool`.
-        #[ink(message)]
-        pub fn get(&self) -> bool {
-            self.value
+            // FIXME: if !used_hashes[hash] { return Err(Error::AlreadyWithdrawen); }
+            // FIXME: remove hash from used_hashes
+
+            // FIXME: if nullifier (hash) is present is the Mapping -> remove from Mapping.
+
+            if self.env().balance() < self.deposit_size {
+                return Err(Error::WithdrawalFailure);
+            }
+
+            if self.env().transfer(self.env().caller(), self.deposit_size).is_err() {
+                return Err(Error::WithdrawalFailure);
+            }
+
+            self.env().emit_event(
+                WithdrawEvent {
+                    hash,
+                    timestamp: self.env().block_timestamp(),
+                });
+
+            Ok(())
         }
     }
 
