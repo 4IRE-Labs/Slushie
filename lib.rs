@@ -53,7 +53,7 @@ mod Slushie {
 
     /// Deposit event when the tokens deposited successfully
     #[ink(event)]
-    pub struct DepositEvent {
+    pub struct Deposited {
         #[ink(topic)]
         hash: PoseidonHash,
 
@@ -62,7 +62,7 @@ mod Slushie {
 
     /// Withdraw event when the tokens withdrawn successfully
     #[ink(event)]
-    pub struct WithdrawEvent {
+    pub struct Withdrawn {
         #[ink(topic)]
         hash: PoseidonHash,
 
@@ -77,10 +77,9 @@ mod Slushie {
         MerkleTreeIsFull,
         MerkleTreeInvalidDepth,
         InvalidTransferredAmount,
-        WithdrawalFailure,
-        WithdrawalFailureInvalidDepositSize,
-        WithdrawalFailureInsufficientFunds,
-        WithdrawalFailureNullifierAlreadyUsed,
+        InvalidDepositSize,
+        InsufficientFunds,
+        NullifierAlreadyUsed,
         UnknownRoot,
     }
 
@@ -126,7 +125,7 @@ mod Slushie {
                 return Err(Error::InvalidTransferredAmount); // FIXME: suggest a better name
             }
 
-            self.env().emit_event(DepositEvent {
+            self.env().emit_event(Deposited {
                 hash,
                 timestamp: self.env().block_timestamp(),
             });
@@ -144,7 +143,7 @@ mod Slushie {
             }
 
             if self.env().balance() < self.deposit_size {
-                return Err(Error::WithdrawalFailureInsufficientFunds);
+                return Err(Error::InsufficientFunds);
             }
 
             if self
@@ -152,16 +151,16 @@ mod Slushie {
                 .transfer(self.env().caller(), self.deposit_size)
                 .is_err()
             {
-                return Err(Error::WithdrawalFailureInvalidDepositSize);
+                return Err(Error::InvalidDepositSize);
             }
 
             if self.used_nullifiers.get(hash).is_some() {
-                return Err(Error::WithdrawalFailureNullifierAlreadyUsed);
+                return Err(Error::NullifierAlreadyUsed);
             }
 
             self.used_nullifiers.insert(hash, &true);
 
-            self.env().emit_event(WithdrawEvent {
+            self.env().emit_event(Withdrawn {
                 hash,
                 timestamp: self.env().block_timestamp(),
             });
