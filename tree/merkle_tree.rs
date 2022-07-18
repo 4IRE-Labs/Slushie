@@ -7,7 +7,7 @@ use ink_storage::traits::{ExtKeyPtr, PackedLayout, SpreadLayout, SpreadAllocate,
 pub const MAX_DEPTH: usize = 32;
 
 /// Merkle tree history size
-pub const DEFAULT_ROOT_HISTORY_SIZE: usize = 30;
+pub const DEFAULT_ROOT_HISTORY_SIZE: usize = 100;
 
 ///Merkle tree with history for storing commitments in it
 #[derive(scale::Encode, scale::Decode, PackedLayout, SpreadLayout, SpreadAllocate, PartialEq)]
