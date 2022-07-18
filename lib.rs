@@ -167,6 +167,12 @@ mod Slushie {
 
             Ok(())
         }
+
+        /// Returns the merkle_tree root hash
+        #[ink(message)]
+        pub fn get_root_hash(&self) -> PoseidonHash {
+            self.merkle_tree.get_last_root() as PoseidonHash
+        }
     }
 
     /// Unit tests in Rust are normally defined within such a `#[cfg(test)]`
