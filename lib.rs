@@ -1,14 +1,14 @@
 //! # Slushie
 //!
-//! This is a Tornado.Cash-like mixer alternative on Polkadot
+//! This is a tornado.cash-like mixer alternative on `pallet-contracts`-compatible chains
 //!
 //! ## Warning
 //!
-//! This is an early stage of development. Use with caution at your own rist. : )
+//! This is in the early stage of development. Use with caution and at your own risk. : )
 //!
 //! ## Overview
 //!
-//! Users `deposit` fixed amount of tokens in smart contract, wait some time and then
+//! Users `deposit` a fixed amount of tokens to a smart contract, wait some time, and then
 //! can withdraw it back from another account. Or someone else can do it, who knows
 //! the proper information.
 //!
@@ -19,14 +19,14 @@
 //!
 //! ### Deposit
 //!
-//! Tokens can only be deposited in constant `deposit_size` amount.
+//! Tokens can only be deposited in a constant `deposit_size` amount.
 //! Returns a MerkleTree root hash after the insertion of the nullifier.
 //!
 //! ### Withdraw
 //!
-//! Tokens can be withdrawed at any time, but for security reasons it's better to wait some period say, 24 hour,
+//! Tokens can be withdrawn at any time, but for security reasons, it's better to wait some period say, 24 hours
 //! after deposit and before withdrawal to make it harder to track the token transfer.
-//! Tokens can be withdrawen only in constant `deposit_size` amount. By anyone who known nullifier and the root hash.
+//! Tokens can be withdrawn only in a constant `deposit_size` amount by anyone who knows the nullifier and the root hash.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -86,9 +86,9 @@ mod Slushie {
     impl From<MerkleTreeError> for Error {
         fn from(err: MerkleTreeError) -> Self {
             match err {
-                MerkleTreeError::MerkleTreeIsFull => return Error::MerkleTreeIsFull,
-                MerkleTreeError::DepthTooLong => return Error::MerkleTreeInvalidDepth,
-                MerkleTreeError::DepthIsZero => return Error::MerkleTreeInvalidDepth,
+                MerkleTreeError::MerkleTreeIsFull => Error::MerkleTreeIsFull,
+                MerkleTreeError::DepthTooLong => Error::MerkleTreeInvalidDepth,
+                MerkleTreeError::DepthIsZero => Error::MerkleTreeInvalidDepth,
             }
         }
     }
@@ -133,9 +133,9 @@ mod Slushie {
             Ok(self.merkle_tree.get_last_root() as PoseidonHash)
         }
 
-        /// Withdraw a fixed amount of tokens into mixer
+        /// Withdraw a fixed amount of tokens from the mixer
         ///
-        /// Can be withdrawen by anyone who knows nullifier and a proper root hash
+        /// Can be withdrawn by anyone who knows the nullifier and the correct root hash
         #[ink(message)]
         pub fn withdraw(&mut self, hash: PoseidonHash, root: PoseidonHash) -> Result<()> {
             if !self.merkle_tree.is_known_root(root) {
