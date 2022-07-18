@@ -40,12 +40,24 @@ mod Slushie {
     pub enum Error {
         DepositFailure,
         MerkleTreeIsFull,
+        MerkleTreeInvalidDepth,
         InvalidTransferredAmount,
         WithdrawalFailure,
         WithdrawalFailureInvalidDepositSize,
         WithdrawalFailureInsufficientFunds,
         WithdrawalFailureNullifierAlreadyUsed,
         UnknownRoot,
+    }
+
+    impl From<MerkleTreeError> for Error {
+        fn from(err: MerkleTreeError) -> Self {
+            match err {
+                MerkleTreeError::MerkleTreeIsFull => return Error::MerkleTreeIsFull,
+                MerkleTreeError::DepthTooLong => return Error::MerkleTreeInvalidDepth,
+                MerkleTreeError::DepthIsZero => return Error::MerkleTreeInvalidDepth, ////
+            }
+        }
+
     }
 
     pub type Result<T> = core::result::Result<T, Error>;
@@ -68,14 +80,7 @@ mod Slushie {
 
         #[ink(message, payable)]
         pub fn deposit(&mut self, hash: PoseidonHash) -> Result<PoseidonHash> {
-            let res = self.merkle_tree.insert(hash);
-            if res.is_err() {
-                // FIXME: implement From trait for MerkleTreeError;
-                match res {
-                    Err(MerkleTreeError::MerkleTreeIsFull) => return Err(Error::MerkleTreeIsFull),
-                    _ => return Err(Error::DepositFailure),
-                }
-            }
+            self.merkle_tree.insert(hash)?;
 
             if self.env().transferred_value() != self.deposit_size {
                 return Err(Error::InvalidTransferredAmount); // FIXME: suggest a better name
