@@ -51,6 +51,11 @@ mod Slushie {
     pub type Result<T> = core::result::Result<T, Error>;
 
     impl Slushie {
+        /// create a new Slushie contract
+        ///
+        /// Takes the deposit_size Balance amount
+        /// so the users can deposit and withdraw
+        /// only a fixed amount of tokens.
         #[ink(constructor)]
         pub fn new(deposit_size: Balance) -> Self {
             ink::utils::initialize_contract(|me: &mut Self| {
@@ -61,6 +66,7 @@ mod Slushie {
             })
         }
 
+        
         #[ink(message, payable)]
         pub fn deposit(&mut self, hash: PoseidonHash) -> Result<PoseidonHash> {
             let res = self.merkle_tree.insert(hash);
