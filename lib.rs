@@ -37,7 +37,9 @@ mod tree;
 #[ink::contract]
 mod Slushie {
     use super::*;
-    use crate::tree::merkle_tree::{MerkleTree, MerkleTreeError, MAX_DEPTH, DEFAULT_ROOT_HISTORY_SIZE};
+    use crate::tree::merkle_tree::{
+        MerkleTree, MerkleTreeError, DEFAULT_ROOT_HISTORY_SIZE, MAX_DEPTH,
+    };
 
     type PoseidonHash = [u8; 32];
 
@@ -87,10 +89,9 @@ mod Slushie {
             match err {
                 MerkleTreeError::MerkleTreeIsFull => return Error::MerkleTreeIsFull,
                 MerkleTreeError::DepthTooLong => return Error::MerkleTreeInvalidDepth,
-                MerkleTreeError::DepthIsZero => return Error::MerkleTreeInvalidDepth, ////
+                MerkleTreeError::DepthIsZero => return Error::MerkleTreeInvalidDepth,
             }
         }
-
     }
 
     pub type Result<T> = core::result::Result<T, Error>;
@@ -106,7 +107,8 @@ mod Slushie {
         #[ink(constructor)]
         pub fn new(deposit_size: Balance) -> Self {
             ink::utils::initialize_contract(|me: &mut Self| {
-                *me = Self { merkle_tree: MerkleTree::<MAX_DEPTH, DEFAULT_ROOT_HISTORY_SIZE>::new().unwrap(),
+                *me = Self {
+                    merkle_tree: MerkleTree::<MAX_DEPTH, DEFAULT_ROOT_HISTORY_SIZE>::new().unwrap(),
                     deposit_size,
                     used_nullifiers: Default::default(),
                 };
@@ -124,11 +126,10 @@ mod Slushie {
                 return Err(Error::InvalidTransferredAmount); // FIXME: suggest a better name
             }
 
-            self.env().emit_event(
-                DepositEvent {
-                    hash,
-                    timestamp: self.env().block_timestamp(),
-                });
+            self.env().emit_event(DepositEvent {
+                hash,
+                timestamp: self.env().block_timestamp(),
+            });
 
             Ok(self.merkle_tree.get_last_root() as PoseidonHash)
         }
@@ -146,7 +147,11 @@ mod Slushie {
                 return Err(Error::WithdrawalFailureInsufficientFunds);
             }
 
-            if self.env().transfer(self.env().caller(), self.deposit_size).is_err() {
+            if self
+                .env()
+                .transfer(self.env().caller(), self.deposit_size)
+                .is_err()
+            {
                 return Err(Error::WithdrawalFailureInvalidDepositSize);
             }
 
@@ -156,11 +161,10 @@ mod Slushie {
 
             self.used_nullifiers.insert(hash, &true);
 
-            self.env().emit_event(
-                WithdrawEvent {
-                    hash,
-                    timestamp: self.env().block_timestamp(),
-                });
+            self.env().emit_event(WithdrawEvent {
+                hash,
+                timestamp: self.env().block_timestamp(),
+            });
 
             Ok(())
         }

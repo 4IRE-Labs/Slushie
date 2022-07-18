@@ -1,7 +1,7 @@
 use hex_literal::hex;
 use ink_env::hash::{Blake2x256, CryptoHash};
 use ink_primitives::KeyPtr;
-use ink_storage::traits::{ExtKeyPtr, PackedLayout, SpreadLayout, SpreadAllocate, StorageLayout};
+use ink_storage::traits::{ExtKeyPtr, PackedLayout, SpreadAllocate, SpreadLayout, StorageLayout};
 
 /// Merkle tree maximum depth
 pub const MAX_DEPTH: usize = 32;
