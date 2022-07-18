@@ -12,20 +12,20 @@ pub const MAX_DEPTH: usize = 32;
 pub(crate) struct MerkleTree<
     const DEPTH: usize,
     const ROOT_HISTORY_SIZE: usize,
-    HASH: MerkleTreeHasher,
+    Hash: MerkleTreeHasher,
 > {
     ///Current root index in the history
     pub current_root_index: u64,
     /// Next leaf index
     pub next_index: u64,
     ///Hashes last filled subtrees on every level
-    pub filled_subtrees: Array<HASH::Output, DEPTH>,
+    pub filled_subtrees: Array<Hash::Output, DEPTH>,
     /// Merkle tree roots history
-    pub roots: Array<HASH::Output, ROOT_HISTORY_SIZE>,
+    pub roots: Array<Hash::Output, ROOT_HISTORY_SIZE>,
 }
 
-impl<const DEPTH: usize, const ROOT_HISTORY_SIZE: usize, HASH: MerkleTreeHasher>
-    MerkleTree<DEPTH, ROOT_HISTORY_SIZE, HASH>
+impl<const DEPTH: usize, const ROOT_HISTORY_SIZE: usize, Hash: MerkleTreeHasher>
+    MerkleTree<DEPTH, ROOT_HISTORY_SIZE, Hash>
 {
     ///Create merkle tree
     pub fn new() -> Result<Self, MerkleTreeError> {
@@ -37,10 +37,10 @@ impl<const DEPTH: usize, const ROOT_HISTORY_SIZE: usize, HASH: MerkleTreeHasher>
             return Err(MerkleTreeError::DepthIsZero);
         }
 
-        let roots = Array([HASH::ZEROS[DEPTH - 1]; ROOT_HISTORY_SIZE]);
+        let roots = Array([Hash::ZEROS[DEPTH - 1]; ROOT_HISTORY_SIZE]);
 
-        let mut filled_subtrees: Array<HASH::Output, DEPTH> = Default::default();
-        filled_subtrees.0.copy_from_slice(&HASH::ZEROS[0..DEPTH]);
+        let mut filled_subtrees: Array<Hash::Output, DEPTH> = Default::default();
+        filled_subtrees.0.copy_from_slice(&Hash::ZEROS[0..DEPTH]);
 
         Ok(Self {
             current_root_index: 0,
@@ -51,12 +51,12 @@ impl<const DEPTH: usize, const ROOT_HISTORY_SIZE: usize, HASH: MerkleTreeHasher>
     }
 
     /// Get last root hash
-    pub fn get_last_root(&self) -> HASH::Output {
+    pub fn get_last_root(&self) -> Hash::Output {
         self.roots.0[self.current_root_index as usize]
     }
 
     /// Check existing provided root in roots history
-    pub fn is_known_root(&self, root: HASH::Output) -> bool {
+    pub fn is_known_root(&self, root: Hash::Output) -> bool {
         if root == Default::default() {
             return false;
         }
@@ -76,7 +76,7 @@ impl<const DEPTH: usize, const ROOT_HISTORY_SIZE: usize, HASH: MerkleTreeHasher>
     }
 
     ///Insert leaf in the merkle tree
-    pub fn insert(&mut self, leaf: HASH::Output) -> Result<usize, MerkleTreeError> {
+    pub fn insert(&mut self, leaf: Hash::Output) -> Result<usize, MerkleTreeError> {
         let next_index = self.next_index as usize;
 
         if self.next_index == 2u64.pow(DEPTH as u32) {
@@ -92,7 +92,7 @@ impl<const DEPTH: usize, const ROOT_HISTORY_SIZE: usize, HASH: MerkleTreeHasher>
             let right;
 
             if current_index % 2 == 0 {
-                right = HASH::ZEROS[i];
+                right = Hash::ZEROS[i];
                 left = current_hash;
 
                 self.filled_subtrees.0[i] = current_hash;
@@ -101,7 +101,7 @@ impl<const DEPTH: usize, const ROOT_HISTORY_SIZE: usize, HASH: MerkleTreeHasher>
                 right = current_hash;
             }
 
-            current_hash = HASH::hash_left_right(left, right);
+            current_hash = Hash::hash_left_right(left, right);
             current_index /= 2;
         }
 
