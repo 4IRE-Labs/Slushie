@@ -31,6 +31,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use ink_lang as ink;
+use hex_literal::hex;
 
 mod tree;
 
@@ -120,11 +121,11 @@ mod Slushie {
         /// Returns the merkle_tree root hash after insertion
         #[ink(message, payable)]
         pub fn deposit(&mut self, hash: PoseidonHash) -> Result<PoseidonHash> {
-            self.merkle_tree.insert(hash)?;
-
             if self.env().transferred_value() != self.deposit_size {
                 return Err(Error::InvalidTransferredAmount); // FIXME: suggest a better name
             }
+
+            self.merkle_tree.insert(hash)?;
 
             self.env().emit_event(Deposited {
                 hash,
@@ -147,16 +148,16 @@ mod Slushie {
                 return Err(Error::InsufficientFunds);
             }
 
+            if self.used_nullifiers.get(hash).is_some() {
+                return Err(Error::NullifierAlreadyUsed);
+            }
+
             if self
                 .env()
                 .transfer(self.env().caller(), self.deposit_size)
                 .is_err()
             {
                 return Err(Error::InvalidDepositSize);
-            }
-
-            if self.used_nullifiers.get(hash).is_some() {
-                return Err(Error::NullifierAlreadyUsed);
             }
 
             self.used_nullifiers.insert(hash, &true);
@@ -176,31 +177,144 @@ mod Slushie {
         }
     }
 
-    /// Unit tests in Rust are normally defined within such a `#[cfg(test)]`
-    /// module and test functions are marked with a `#[test]` attribute.
-    /// The below code is technically just normal Rust code.
+    /// Unit tests
     #[cfg(test)]
     mod tests {
-        /// Imports all the definitions from the outer scope so we can use them here.
         use super::*;
 
         /// Imports `ink_lang` so we can use `#[ink::test]`.
         use ink_lang as ink;
 
-        /// We test if the default constructor does its job.
         #[ink::test]
-        fn default_works() {
-            let Slushie = Slushie::default();
-            assert_eq!(Slushie.get(), false);
+        fn test_constructor() {
+            let slushie: Slushie = Slushie::new(13);
+
+            assert_eq!(slushie.deposit_size, 13 as Balance);
+            assert_eq!(slushie.merkle_tree, MerkleTree::<MAX_DEPTH, DEFAULT_ROOT_HISTORY_SIZE, Poseidon>::new().unwrap());
         }
 
-        /// We test a simple use case of our contract.
+        /// can deposit funds with a proper `deposit_size`
         #[ink::test]
-        fn it_works() {
-            let mut Slushie = Slushie::new(false);
-            assert_eq!(Slushie.get(), false);
-            Slushie.flip();
-            assert_eq!(Slushie.get(), true);
+        fn test_deposit_1() {
+            let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
+            let mut slushie: Slushie = Slushie::new(13);
+            let hash: PoseidonHash = hex!("0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f");
+
+            let initial_root_hash = slushie.get_root_hash();
+
+            ink_env::test::set_caller::<Environment>(accounts.bob);
+            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(13);
+            let res = slushie.deposit(hash);
+            assert!(res.is_ok());
+
+            let resulting_root_hash = slushie.get_root_hash();
+            assert_ne!(initial_root_hash, resulting_root_hash);
+        }
+
+        /// can't deposit funds with an invalid `deposit_size`
+        #[ink::test]
+        fn test_deposit_2() {
+            let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
+            let deposit_size = 13;
+            let invalid_deposit_size = 55;
+            let mut slushie: Slushie = Slushie::new(deposit_size);
+            let hash: PoseidonHash = hex!("0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f");
+
+            let initial_root_hash = slushie.get_root_hash();
+
+            ink_env::test::set_caller::<Environment>(accounts.bob);
+            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(invalid_deposit_size);
+            let res = slushie.deposit(hash);
+            assert_eq!(res.unwrap_err(), Error::InvalidTransferredAmount);
+
+            let resulting_root_hash = slushie.get_root_hash();
+            assert_eq!(initial_root_hash, resulting_root_hash);
+        }
+
+        /// can't deposit funds if account doesn't have enough money
+        ///
+        /// this case shouldn't be tested cause is a pallete, which
+        /// checks the sufficient amount of funds
+
+        /// - can withdraw funds with a proper deposit_size and hash
+        #[ink::test]
+        fn test_withdraw_1() {
+            let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
+            let deposit_size: Balance = 13;
+            let mut slushie: Slushie = Slushie::new(deposit_size);
+            let hash: PoseidonHash = hex!("0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f");
+
+            ink_env::test::set_caller::<Environment>(accounts.alice);
+            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(deposit_size);
+            let res = slushie.deposit(hash);
+            assert!(res.is_ok());
+
+            let resulting_root_hash = slushie.get_root_hash();
+
+            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(deposit_size);
+            let res = slushie.withdraw(hash, resulting_root_hash);
+            assert!(res.is_ok());
+        }
+
+        /// - can withdraw funds with a proper deposit_size and hash by different account
+        #[ink::test]
+        fn test_withdraw_2() {
+            let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
+            let deposit_size = 13;
+            let mut slushie: Slushie = Slushie::new(deposit_size);
+            let hash: PoseidonHash = hex!("0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f");
+
+            ink_env::test::set_caller::<Environment>(accounts.alice);
+            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(deposit_size);
+            let res = slushie.deposit(hash);
+            assert!(res.is_ok());
+
+            let resulting_root_hash = slushie.get_root_hash();
+
+            ink_env::test::set_caller::<Environment>(accounts.eve);
+            let res = slushie.withdraw(hash, resulting_root_hash);
+            assert!(res.is_ok());
+        }
+
+        /// - can't withdraw funds with invalid root hash
+        #[ink::test]
+        fn test_withdraw_3() {
+            let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
+            let deposit_size = 13;
+            let mut slushie: Slushie = Slushie::new(deposit_size);
+            let hash: PoseidonHash = hex!("0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f");
+
+            ink_env::test::set_caller::<Environment>(accounts.alice);
+            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(deposit_size);
+            let res = slushie.deposit(hash);
+            assert!(res.is_ok());
+
+            let invalid_root_hash: PoseidonHash = hex!("0000000000000000 0000000000000000 0001020304050607 08090a0b0c0d0e0f");
+
+            let res = slushie.withdraw(hash, invalid_root_hash);
+            assert_eq!(res.unwrap_err(), Error::UnknownRoot);
+        }
+
+        /// - can't double withdraw funds with a proper deposit_size and a valid hash
+        #[ink::test]
+        fn test_withdraw_4() {
+            let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
+            let deposit_size = 13;
+            let mut slushie: Slushie = Slushie::new(deposit_size);
+            let hash: PoseidonHash = hex!("0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f");
+
+            ink_env::test::set_caller::<Environment>(accounts.alice);
+            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(deposit_size);
+            let res = slushie.deposit(hash);
+            assert!(res.is_ok());
+
+            let resulting_root_hash = slushie.get_root_hash();
+
+            let res = slushie.withdraw(hash, resulting_root_hash);
+            assert!(res.is_ok());
+
+            let res = slushie.withdraw(hash, resulting_root_hash);
+            assert_eq!(res.unwrap_err(), Error::NullifierAlreadyUsed);
         }
     }
 }
