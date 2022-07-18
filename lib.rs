@@ -1,3 +1,33 @@
+//! # Slushie
+//!
+//! This is a Tornado.Cash-like mixer alternative on Polkadot
+//!
+//! ## Warning
+//!
+//! This is an early stage of development. Use with caution at your own rist. : )
+//!
+//! ## Overview
+//!
+//! Users `deposit` fixed amount of tokens in smart contract, wait some time and then
+//! can withdraw it back from another account. Or someone else can do it, who knows
+//! the proper information.
+//!
+//! ## Error Handling
+//!
+//! Any function that modifies the state returns a `Result` type and does not changes the state
+//! if the `Error` occurs. The errors are defined as an `enum` type.
+//!
+//! ### Deposit
+//!
+//! Tokens can only be deposited in constant `deposit_size` amount.
+//! Returns a MerkleTree root hash after the insertion of the nullifier.
+//!
+//! ### Withdraw
+//!
+//! Tokens can be withdrawed at any time, but for security reasons it's better to wait some period say, 24 hour,
+//! after deposit and before withdrawal to make it harder to track the token transfer.
+//! Tokens can be withdrawen only in constant `deposit_size` amount. By anyone who known nullifier and the root hash.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use ink_lang as ink;
@@ -19,6 +49,7 @@ mod Slushie {
         used_nullifiers: ink_storage::Mapping<PoseidonHash, bool>,
     }
 
+    /// Deposit event when the tokens deposited successfully
     #[ink(event)]
     pub struct DepositEvent {
         #[ink(topic)]
@@ -27,6 +58,7 @@ mod Slushie {
         timestamp: Timestamp,
     }
 
+    /// Withdraw event when the tokens withdrawn successfully
     #[ink(event)]
     pub struct WithdrawEvent {
         #[ink(topic)]
@@ -35,6 +67,7 @@ mod Slushie {
         timestamp: Timestamp,
     }
 
+    /// Errors which my be returned from the smart contract
     #[derive(Debug, PartialEq, Eq, scale::Encode, scale::Decode)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
     pub enum Error {
@@ -67,7 +100,9 @@ mod Slushie {
         ///
         /// Takes the deposit_size Balance amount
         /// so the users can deposit and withdraw
-        /// only a fixed amount of tokens.
+        /// only in a fixed amount of tokens.
+        /// Can be set only when the smart contract
+        /// instantiated.
         #[ink(constructor)]
         pub fn new(deposit_size: Balance) -> Self {
             ink::utils::initialize_contract(|me: &mut Self| {
@@ -78,6 +113,9 @@ mod Slushie {
             })
         }
 
+        /// Deposit a fixed amount of tokens into mixer
+        ///
+        /// Returns the merkle_tree root hash after insertion
         #[ink(message, payable)]
         pub fn deposit(&mut self, hash: PoseidonHash) -> Result<PoseidonHash> {
             self.merkle_tree.insert(hash)?;
@@ -95,6 +133,9 @@ mod Slushie {
             Ok(self.merkle_tree.get_last_root() as PoseidonHash)
         }
 
+        /// Withdraw a fixed amount of tokens into mixer
+        ///
+        /// Can be withdrawen by anyone who knows nullifier and a proper root hash
         #[ink(message)]
         pub fn withdraw(&mut self, hash: PoseidonHash, root: PoseidonHash) -> Result<()> {
             if !self.merkle_tree.is_known_root(root) {
