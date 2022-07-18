@@ -7,14 +7,14 @@ mod tree;
 #[ink::contract]
 mod Slushie {
     use super::*;
-    use crate::tree::merkle_tree::{MerkleTree, MerkleTreeError, MAX_DEPTH};
+    use crate::tree::merkle_tree::{MerkleTree, MerkleTreeError, MAX_DEPTH, DEFAULT_ROOT_HISTORY_SIZE};
 
     type PoseidonHash = [u8; 32];
 
     #[ink(storage)]
     #[derive(ink_storage::traits::SpreadAllocate)]
     pub struct Slushie {
-        merkle_tree: MerkleTree<MAX_DEPTH>,
+        merkle_tree: MerkleTree<MAX_DEPTH, DEFAULT_ROOT_HISTORY_SIZE>,
         deposit_size: Balance,
         used_nullifiers: ink_storage::Mapping<PoseidonHash, bool>,
     }
@@ -42,9 +42,9 @@ mod Slushie {
         MerkleTreeIsFull,
         InvalidTransferredAmount,
         WithdrawalFailure,
-        WithdrawalFailure_InvalidDepositSize,
-        WithdrawalFailure_InsufficientFunds,
-        WithdrawalFailure_NullifierAlreadyUsed,
+        WithdrawalFailureInvalidDepositSize,
+        WithdrawalFailureInsufficientFunds,
+        WithdrawalFailureNullifierAlreadyUsed,
         UnknownRoot,
     }
 
@@ -59,14 +59,13 @@ mod Slushie {
         #[ink(constructor)]
         pub fn new(deposit_size: Balance) -> Self {
             ink::utils::initialize_contract(|me: &mut Self| {
-                *me = Self { merkle_tree: MerkleTree::<MAX_DEPTH>::new().unwrap(),
+                *me = Self { merkle_tree: MerkleTree::<MAX_DEPTH, DEFAULT_ROOT_HISTORY_SIZE>::new().unwrap(),
                     deposit_size,
                     used_nullifiers: Default::default(),
                 };
             })
         }
 
-        
         #[ink(message, payable)]
         pub fn deposit(&mut self, hash: PoseidonHash) -> Result<PoseidonHash> {
             let res = self.merkle_tree.insert(hash);
@@ -98,15 +97,15 @@ mod Slushie {
             }
 
             if self.env().balance() < self.deposit_size {
-                return Err(Error::WithdrawalFailure_InsufficientFunds);
+                return Err(Error::WithdrawalFailureInsufficientFunds);
             }
 
             if self.env().transfer(self.env().caller(), self.deposit_size).is_err() {
-                return Err(Error::WithdrawalFailure_InvalidDepositSize);
+                return Err(Error::WithdrawalFailureInvalidDepositSize);
             }
 
             if self.used_nullifiers.get(hash).is_some() {
-                return Err(Error::WithdrawalFailure_NullifierAlreadyUsed);
+                return Err(Error::WithdrawalFailureNullifierAlreadyUsed);
             }
 
             self.used_nullifiers.insert(hash, &true);

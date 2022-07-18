@@ -6,6 +6,9 @@ use ink_storage::traits::{ExtKeyPtr, PackedLayout, SpreadLayout, SpreadAllocate,
 /// Merkle tree maximum depth
 pub const MAX_DEPTH: usize = 32;
 
+/// Merkle tree history size
+pub const DEFAULT_ROOT_HISTORY_SIZE: usize = 30;
+
 ///Merkle tree with history for storing commitments in it
 #[derive(scale::Encode, scale::Decode, PackedLayout, SpreadLayout, SpreadAllocate, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug, StorageLayout))]
@@ -128,7 +131,7 @@ pub(crate) enum MerkleTreeError {
     DepthIsZero,
 }
 
-#[derive(scale::Encode, scale::Decode, PackedLayout, SpreadLayout, PartialEq)]
+#[derive(scale::Encode, scale::Decode, PackedLayout, SpreadLayout, SpreadAllocate, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Array<T: Default + Clone + Copy, const N: usize>([T; N]);
 
