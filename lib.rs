@@ -195,7 +195,7 @@ mod Slushie {
 
         /// can deposit funds with a proper `deposit_size`
         #[ink::test]
-        fn test_deposit_1() {
+        fn deposit_works() {
             let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
             let mut slushie: Slushie = Slushie::new(13);
             let hash: PoseidonHash = hex!("0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f");
@@ -213,7 +213,7 @@ mod Slushie {
 
         /// can't deposit funds with an invalid `deposit_size`
         #[ink::test]
-        fn test_deposit_2() {
+        fn deposit_invalid_amount_fails() {
             let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
             let deposit_size = 13;
             let invalid_deposit_size = 55;
@@ -238,7 +238,7 @@ mod Slushie {
 
         /// - can withdraw funds with a proper deposit_size and hash
         #[ink::test]
-        fn test_withdraw_1() {
+        fn withdraw_works() {
             let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
             let deposit_size: Balance = 13;
             let mut slushie: Slushie = Slushie::new(deposit_size);
@@ -258,7 +258,7 @@ mod Slushie {
 
         /// - can withdraw funds with a proper deposit_size and hash by different account
         #[ink::test]
-        fn test_withdraw_2() {
+        fn withdraw_from_different_account_works() {
             let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
             let deposit_size = 13;
             let mut slushie: Slushie = Slushie::new(deposit_size);
@@ -278,7 +278,7 @@ mod Slushie {
 
         /// - can't withdraw funds with invalid root hash
         #[ink::test]
-        fn test_withdraw_3() {
+        fn withdraw_with_invalid_root_fails() {
             let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
             let deposit_size = 13;
             let mut slushie: Slushie = Slushie::new(deposit_size);
@@ -297,7 +297,7 @@ mod Slushie {
 
         /// - can't double withdraw funds with a proper deposit_size and a valid hash
         #[ink::test]
-        fn test_withdraw_4() {
+        fn withdraw_with_used_nullifier_fails() {
             let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
             let deposit_size = 13;
             let mut slushie: Slushie = Slushie::new(deposit_size);
