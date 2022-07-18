@@ -1,13 +1,13 @@
 use hex_literal::hex;
 use ink_env::hash::{Blake2x256, CryptoHash};
 use ink_primitives::KeyPtr;
-use ink_storage::traits::{ExtKeyPtr, PackedLayout, SpreadLayout, StorageLayout};
+use ink_storage::traits::{ExtKeyPtr, PackedLayout, SpreadLayout, SpreadAllocate, StorageLayout};
 
 /// Merkle tree maximum depth
 pub const MAX_DEPTH: usize = 32;
 
 ///Merkle tree with history for storing commitments in it
-#[derive(scale::Encode, scale::Decode, PackedLayout, SpreadLayout, PartialEq)]
+#[derive(scale::Encode, scale::Decode, PackedLayout, SpreadLayout, SpreadAllocate, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug, StorageLayout))]
 pub(crate) struct MerkleTree<const DEPTH: usize, const ROOT_HISTORY_SIZE: usize> {
     ///Current root index in the history
