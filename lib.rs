@@ -331,6 +331,15 @@ mod slushie {
         mod withdraw {
             use super::*;
 
+            // utility function
+            fn setup_and_create_deposit(contract: &mut Slushie, before: &Context) {
+                ink_env::test::set_caller::<Environment>(before.accounts.alice);
+                ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(before.deposit_size);
+                let res = contract.deposit(before.hash1);
+                assert!(res.is_ok());
+            }
+
+
             fn assert_withdrawn_event(event: &ink_env::test::EmittedEvent) {
                 let decoded_event = <Event as scale::Decode>::decode(&mut &event.data[..])
                     .expect("encountered invalid contract event data buffer");
@@ -356,12 +365,7 @@ mod slushie {
                 let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
                 let before = Context::new(&contract);
 
-                ink_env::test::set_caller::<Environment>(before.accounts.alice);
-                ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
-                    before.deposit_size,
-                );
-                let res = contract.deposit(before.hash1);
-                assert!(res.is_ok());
+                setup_and_create_deposit(&mut contract, &before);
 
                 let after_deposit = Context::new(&contract);
                 //assert_ne!(before.alice_balance, after_deposit.alice_balance);
@@ -383,20 +387,13 @@ mod slushie {
 
             /// - can withdraw funds with a proper deposit_size and hash by different account
             #[ink::test]
-            fn from_different_account_works() {
+            fn different_account_works() {
                 let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
                 let before = Context::new(&contract);
 
-                ink_env::test::set_caller::<Environment>(before.accounts.alice);
-                ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
-                    before.deposit_size,
-                );
-                let res = contract.deposit(before.hash1);
-                assert!(res.is_ok());
+                setup_and_create_deposit(&mut contract, &before);
 
                 let after = Context::new(&contract);
-
-                //assert_ne!(before.alice_balance, after.alice_balance);
 
                 ink_env::test::set_caller::<Environment>(before.accounts.eve);
                 let res = contract.withdraw(before.hash1, after.root_hash);
@@ -417,12 +414,7 @@ mod slushie {
                 let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
                 let before = Context::new(&contract);
 
-                ink_env::test::set_caller::<Environment>(before.accounts.alice);
-                ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
-                    before.deposit_size,
-                );
-                let res = contract.deposit(before.hash1);
-                assert!(res.is_ok());
+                setup_and_create_deposit(&mut contract, &before);
 
                 let invalid_root_hash: PoseidonHash =
                     hex!("0000000000000000 0000000000000000 0001020304050607 08090a0b0c0d0e0f");
@@ -437,12 +429,7 @@ mod slushie {
                 let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
                 let before = Context::new(&contract);
 
-                ink_env::test::set_caller::<Environment>(before.accounts.alice);
-                ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
-                    before.deposit_size,
-                );
-                let res = contract.deposit(before.hash1);
-                assert!(res.is_ok());
+                setup_and_create_deposit(&mut contract, &before);
 
                 let after = Context::new(&contract);
 
@@ -459,21 +446,13 @@ mod slushie {
                 let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
                 let before = Context::new(&contract);
 
-                ink_env::test::set_caller::<Environment>(before.accounts.alice);
-                ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
-                    before.deposit_size,
-                );
-                let res = contract.deposit(before.hash1);
-                assert!(res.is_ok());
+                setup_and_create_deposit(&mut contract, &before);
 
                 let after_deposit = Context::new(&contract);
 
                 // FIXME: user account balance doesn't change
                 //assert_ne!(before.alice_balance, after.alice_balance);
 
-                ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
-                    before.deposit_size,
-                );
                 let res = contract.withdraw(before.hash1, after_deposit.root_hash);
                 assert!(res.is_ok());
 
@@ -513,12 +492,7 @@ mod slushie {
                 let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
                 let before = Context::new(&contract);
 
-                ink_env::test::set_caller::<Environment>(before.accounts.alice);
-                ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
-                    before.deposit_size,
-                );
-                let res = contract.deposit(before.hash1);
-                assert!(res.is_ok());
+                setup_and_create_deposit(&mut contract, &before);
 
                 let after_deposit = Context::new(&contract);
 
