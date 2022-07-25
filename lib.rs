@@ -291,7 +291,7 @@ mod slushie {
                 ink_env::test::set_caller::<Environment>(before.accounts.bob);
                 ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
                     before.deposit_size,
-                    );
+                );
                 let res = contract.deposit(before.hash1);
                 assert!(res.is_ok());
 
@@ -318,7 +318,7 @@ mod slushie {
                 ink_env::test::set_caller::<Environment>(before.accounts.bob);
                 ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
                     before.invalid_deposit_size,
-                    );
+                );
                 let res = contract.deposit(before.hash1);
                 assert_eq!(res.unwrap_err(), Error::InvalidTransferredAmount);
 
@@ -359,7 +359,7 @@ mod slushie {
                 ink_env::test::set_caller::<Environment>(before.accounts.alice);
                 ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
                     before.deposit_size,
-                    );
+                );
                 let res = contract.deposit(before.hash1);
                 assert!(res.is_ok());
 
@@ -390,7 +390,7 @@ mod slushie {
                 ink_env::test::set_caller::<Environment>(before.accounts.alice);
                 ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
                     before.deposit_size,
-                    );
+                );
                 let res = contract.deposit(before.hash1);
                 assert!(res.is_ok());
 
@@ -420,7 +420,7 @@ mod slushie {
                 ink_env::test::set_caller::<Environment>(before.accounts.alice);
                 ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
                     before.deposit_size,
-                    );
+                );
                 let res = contract.deposit(before.hash1);
                 assert!(res.is_ok());
 
@@ -440,7 +440,7 @@ mod slushie {
                 ink_env::test::set_caller::<Environment>(before.accounts.alice);
                 ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
                     before.deposit_size,
-                    );
+                );
                 let res = contract.deposit(before.hash1);
                 assert!(res.is_ok());
 
@@ -462,7 +462,7 @@ mod slushie {
                 ink_env::test::set_caller::<Environment>(before.accounts.alice);
                 ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
                     before.deposit_size,
-                    );
+                );
                 let res = contract.deposit(before.hash1);
                 assert!(res.is_ok());
 
@@ -473,7 +473,7 @@ mod slushie {
 
                 ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
                     before.deposit_size,
-                    );
+                );
                 let res = contract.withdraw(before.hash1, after_deposit.root_hash);
                 assert!(res.is_ok());
 
@@ -492,7 +492,7 @@ mod slushie {
                 assert_ne!(
                     after_withdrawal2.alice_balance,
                     after_withdrawal.alice_balance
-                    );
+                );
 
                 let res = contract.withdraw(before.hash3, after_withdrawal2.root_hash);
                 assert!(res.is_ok());
@@ -500,7 +500,7 @@ mod slushie {
                 assert_ne!(
                     after_withdrawal3.alice_balance,
                     after_withdrawal2.alice_balance
-                    );
+                );
 
                 // FIXME: currently the contract balance does not change
                 //assert_eq!(before.contract_balance, after_withdrawal.contract_balance);
@@ -516,7 +516,7 @@ mod slushie {
                 ink_env::test::set_caller::<Environment>(before.accounts.alice);
                 ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
                     before.deposit_size,
-                    );
+                );
                 let res = contract.deposit(before.hash1);
                 assert!(res.is_ok());
 
@@ -528,7 +528,7 @@ mod slushie {
                 let res = contract.withdraw(
                     before.hash2, // invalid hash
                     after_deposit.root_hash,
-                    ); // valid root
+                ); // valid root
                 assert_eq!(res.unwrap_err(), Error::UnknownNullifier);
             }
         }
