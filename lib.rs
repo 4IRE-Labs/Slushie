@@ -334,11 +334,12 @@ mod slushie {
             // utility function
             fn setup_and_create_deposit(contract: &mut Slushie, before: &Context) {
                 ink_env::test::set_caller::<Environment>(before.accounts.alice);
-                ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(before.deposit_size);
+                ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
+                    before.deposit_size,
+                );
                 let res = contract.deposit(before.hash1);
                 assert!(res.is_ok());
             }
-
 
             fn assert_withdrawn_event(event: &ink_env::test::EmittedEvent) {
                 let decoded_event = <Event as scale::Decode>::decode(&mut &event.data[..])
