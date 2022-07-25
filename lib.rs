@@ -254,34 +254,6 @@ mod slushie {
 
         type Event = <Slushie as ::ink_lang::reflect::ContractEventBase>::Type;
 
-        fn assert_deposited_event(event: &ink_env::test::EmittedEvent) {
-            let decoded_event = <Event as scale::Decode>::decode(&mut &event.data[..])
-                .expect("encountered invalid contract event data buffer");
-            if let Event::Deposited(Deposited {
-                hash: _,
-                timestamp: _,
-            }) = decoded_event
-            {
-                // actual fields value doesn't matter right now
-            } else {
-                panic!("encountered unexpected event kind: expected a Deposited event")
-            }
-        }
-
-        fn assert_withdrawn_event(event: &ink_env::test::EmittedEvent) {
-            let decoded_event = <Event as scale::Decode>::decode(&mut &event.data[..])
-                .expect("encountered invalid contract event data buffer");
-            if let Event::Withdrawn(Withdrawn {
-                hash: _,
-                timestamp: _,
-            }) = decoded_event
-            {
-                // actual fields value doesn't matter right now
-            } else {
-                panic!("encountered unexpected event kind: expected a Withdrawn event")
-            }
-        }
-
         #[ink::test]
         fn test_constructor() {
             let slushie: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
@@ -295,6 +267,20 @@ mod slushie {
 
         mod deposit {
             use super::*;
+
+            fn assert_deposited_event(event: &ink_env::test::EmittedEvent) {
+                let decoded_event = <Event as scale::Decode>::decode(&mut &event.data[..])
+                    .expect("encountered invalid contract event data buffer");
+                if let Event::Deposited(Deposited {
+                    hash: _,
+                    timestamp: _,
+                }) = decoded_event
+                {
+                    // actual fields value doesn't matter right now
+                } else {
+                    panic!("encountered unexpected event kind: expected a Deposited event")
+                }
+            }
 
             /// can deposit funds with a proper `deposit_size`
             #[ink::test]
@@ -345,6 +331,20 @@ mod slushie {
         mod withdraw {
             use super::*;
 
+            fn assert_withdrawn_event(event: &ink_env::test::EmittedEvent) {
+                let decoded_event = <Event as scale::Decode>::decode(&mut &event.data[..])
+                    .expect("encountered invalid contract event data buffer");
+                if let Event::Withdrawn(Withdrawn {
+                    hash: _,
+                    timestamp: _,
+                }) = decoded_event
+                {
+                    // actual fields value doesn't matter right now
+                } else {
+                    panic!("encountered unexpected event kind: expected a Withdrawn event")
+                }
+            }
+
             /// can't deposit funds if account doesn't have enough money
             ///
             /// this case shouldn't be tested cause is a pallete, which
@@ -378,7 +378,6 @@ mod slushie {
 
                 let emitted_events = ink_env::test::recorded_events().collect::<Vec<_>>();
                 assert_eq!(emitted_events.len(), 2); // Desposited and Withdrawn events!
-                assert_deposited_event(&emitted_events[0]);
                 assert_withdrawn_event(&emitted_events[1]);
             }
 
@@ -409,7 +408,6 @@ mod slushie {
 
                 let emitted_events = ink_env::test::recorded_events().collect::<Vec<_>>();
                 assert_eq!(emitted_events.len(), 2); // Desposited and Withdrawn events!
-                assert_deposited_event(&emitted_events[0]);
                 assert_withdrawn_event(&emitted_events[1]);
             }
 
