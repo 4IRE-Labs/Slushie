@@ -81,6 +81,7 @@ mod slushie {
         InvalidDepositSize,
         InsufficientFunds,
         NullifierAlreadyUsed,
+        UnknownNullifier,
         UnknownRoot,
     }
 
@@ -140,7 +141,9 @@ mod slushie {
         ///
         /// Can be withdrawn by anyone who knows the nullifier and the correct root hash
         #[ink(message)]
-        pub fn withdraw(&mut self, nullifier_hash: PoseidonHash, root: PoseidonHash) -> Result<()> {
+        pub fn withdraw(&mut self, commitment: PoseidonHash, root: PoseidonHash) -> Result<()> {
+            // FIXME: return Err(Error::UnknownNullifier) if hash wasn't deposited before
+
             if !self.merkle_tree.is_known_root(root) {
                 return Err(Error::UnknownRoot);
             }
@@ -149,7 +152,7 @@ mod slushie {
                 return Err(Error::InsufficientFunds);
             }
 
-            if self.used_nullifiers.get(nullifier_hash).is_some() {
+            if self.used_nullifiers.get(commitment).is_some() {
                 return Err(Error::NullifierAlreadyUsed);
             }
 
@@ -161,10 +164,10 @@ mod slushie {
                 return Err(Error::InvalidDepositSize);
             }
 
-            self.used_nullifiers.insert(nullifier_hash, &true);
+            self.used_nullifiers.insert(commitment, &true);
 
             self.env().emit_event(Withdrawn {
-                hash: nullifier_hash,
+                hash: commitment,
                 timestamp: self.env().block_timestamp(),
             });
 
@@ -183,151 +186,326 @@ mod slushie {
     mod tests {
         use super::*;
         use hex_literal::hex;
+        use ink_lang::codegen::Env;
 
         /// Imports `ink_lang` so we can use `#[ink::test]`.
         use ink_lang as ink;
 
+        const DEFAULT_DEPOSIT_SIZE: Balance = 13;
+
+        struct Context {
+            hash1: PoseidonHash,
+            hash2: PoseidonHash,
+            hash3: PoseidonHash,
+
+            accounts: ink_env::test::DefaultAccounts<ink_env::DefaultEnvironment>,
+            alice_balance: Balance,
+            #[allow(dead_code)]
+            bob_balance: Balance,
+            #[allow(dead_code)]
+            eve_balance: Balance,
+            #[allow(dead_code)]
+            contract_balance: Balance,
+            root_hash: PoseidonHash,
+
+            deposit_size: Balance,
+            invalid_deposit_size: Balance,
+        }
+
+        impl Context {
+            fn new(slushie: &Slushie) -> Self {
+                let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
+
+                Self {
+                    hash1: hex!(
+                        "0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f"
+                    ),
+                    hash2: hex!(
+                        "0000000000000000 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f"
+                    ),
+                    hash3: hex!(
+                        "0000000000000000 0000000000000000 0001020304050607 08090a0b0c0d0e0f"
+                    ),
+
+                    accounts: ink_env::test::default_accounts::<ink_env::DefaultEnvironment>(),
+
+                    alice_balance:
+                        ink_env::test::get_account_balance::<ink_env::DefaultEnvironment>(
+                            accounts.alice,
+                        )
+                        .unwrap(),
+                    bob_balance: ink_env::test::get_account_balance::<ink_env::DefaultEnvironment>(
+                        accounts.bob,
+                    )
+                    .unwrap(),
+                    eve_balance: ink_env::test::get_account_balance::<ink_env::DefaultEnvironment>(
+                        accounts.eve,
+                    )
+                    .unwrap(),
+
+                    contract_balance: slushie.env().balance(),
+                    root_hash: slushie.get_root_hash(),
+
+                    deposit_size: DEFAULT_DEPOSIT_SIZE,
+                    invalid_deposit_size: 77,
+                }
+            }
+        }
+
+        type Event = <Slushie as ::ink_lang::reflect::ContractEventBase>::Type;
+
         #[ink::test]
         fn test_constructor() {
-            let slushie: Slushie = Slushie::new(13);
+            let slushie: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
 
-            assert_eq!(slushie.deposit_size, 13 as Balance);
+            assert_eq!(slushie.deposit_size, DEFAULT_DEPOSIT_SIZE as Balance);
             assert_eq!(
                 slushie.merkle_tree,
                 MerkleTree::<MAX_DEPTH, DEFAULT_ROOT_HISTORY_SIZE, Poseidon>::new().unwrap()
             );
         }
 
-        /// can deposit funds with a proper `deposit_size`
-        #[ink::test]
-        fn deposit_works() {
-            let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
-            let mut slushie: Slushie = Slushie::new(13);
-            let commitment: PoseidonHash =
-                hex!("0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f");
+        mod deposit {
+            use super::*;
 
-            let initial_root_hash = slushie.get_root_hash();
+            fn assert_deposited_event(event: &ink_env::test::EmittedEvent) {
+                let decoded_event = <Event as scale::Decode>::decode(&mut &event.data[..])
+                    .expect("encountered invalid contract event data buffer");
+                if let Event::Deposited(Deposited {
+                    hash: _,
+                    timestamp: _,
+                }) = decoded_event
+                {
+                    // actual fields value doesn't matter right now
+                } else {
+                    panic!("encountered unexpected event kind: expected a Deposited event")
+                }
+            }
 
-            ink_env::test::set_caller::<Environment>(accounts.bob);
-            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(13);
-            let res = slushie.deposit(commitment);
-            assert!(res.is_ok());
+            /// can deposit funds with a proper `deposit_size`
+            #[ink::test]
+            fn works() {
+                let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
+                let before = Context::new(&contract);
 
-            let resulting_root_hash = slushie.get_root_hash();
-            assert_ne!(initial_root_hash, resulting_root_hash);
+                ink_env::test::set_caller::<Environment>(before.accounts.bob);
+                ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
+                    before.deposit_size,
+                );
+                let res = contract.deposit(before.hash1);
+                assert!(res.is_ok());
+
+                let after = Context::new(&contract);
+
+                //FIXME: currently contract balance doesn't change
+                //assert_ne!(before.contract_balance, after.contract_balance);
+                //FIXME: user's balance after deposit doesn't change
+                //assert_ne!(before.bob_balance, after.bob_balance);
+
+                assert_ne!(before.root_hash, after.root_hash);
+
+                let emitted_events = ink_env::test::recorded_events().collect::<Vec<_>>();
+                assert_eq!(emitted_events.len(), 1);
+                assert_deposited_event(&emitted_events[0]);
+            }
+
+            /// can't deposit funds with an invalid `deposit_size`
+            #[ink::test]
+            fn invalid_amount_fails() {
+                let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
+                let before = Context::new(&contract);
+
+                ink_env::test::set_caller::<Environment>(before.accounts.bob);
+                ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
+                    before.invalid_deposit_size,
+                );
+                let res = contract.deposit(before.hash1);
+                assert_eq!(res.unwrap_err(), Error::InvalidTransferredAmount);
+
+                let after = Context::new(&contract);
+
+                assert_eq!(before.root_hash, after.root_hash);
+            }
         }
 
-        /// can't deposit funds with an invalid `deposit_size`
-        #[ink::test]
-        fn deposit_invalid_amount_fails() {
-            let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
-            let deposit_size = 13;
-            let invalid_deposit_size = 55;
-            let mut slushie: Slushie = Slushie::new(deposit_size);
-            let commitment: PoseidonHash =
-                hex!("0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f");
+        mod withdraw {
+            use super::*;
 
-            let initial_root_hash = slushie.get_root_hash();
+            // utility function
+            fn setup_and_create_deposit(contract: &mut Slushie, before: &Context) {
+                ink_env::test::set_caller::<Environment>(before.accounts.alice);
+                ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
+                    before.deposit_size,
+                );
+                let res = contract.deposit(before.hash1);
+                assert!(res.is_ok());
+            }
 
-            ink_env::test::set_caller::<Environment>(accounts.bob);
-            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(
-                invalid_deposit_size,
-            );
-            let res = slushie.deposit(commitment);
-            assert_eq!(res.unwrap_err(), Error::InvalidTransferredAmount);
+            fn assert_withdrawn_event(event: &ink_env::test::EmittedEvent) {
+                let decoded_event = <Event as scale::Decode>::decode(&mut &event.data[..])
+                    .expect("encountered invalid contract event data buffer");
+                if let Event::Withdrawn(Withdrawn {
+                    hash: _,
+                    timestamp: _,
+                }) = decoded_event
+                {
+                    // actual fields value doesn't matter right now
+                } else {
+                    panic!("encountered unexpected event kind: expected a Withdrawn event")
+                }
+            }
 
-            let resulting_root_hash = slushie.get_root_hash();
-            assert_eq!(initial_root_hash, resulting_root_hash);
-        }
+            /// can't deposit funds if account doesn't have enough money
+            ///
+            /// this case shouldn't be tested cause is a pallete, which
+            /// checks the sufficient amount of funds
 
-        /// can't deposit funds if account doesn't have enough money
-        ///
-        /// this case shouldn't be tested cause is a pallete, which
-        /// checks the sufficient amount of funds
+            /// - can withdraw funds with a proper deposit_size and hash
+            #[ink::test]
+            fn works() {
+                let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
+                let before = Context::new(&contract);
 
-        /// - can withdraw funds with a proper deposit_size and hash
-        #[ink::test]
-        fn withdraw_works() {
-            let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
-            let deposit_size: Balance = 13;
-            let mut slushie: Slushie = Slushie::new(deposit_size);
-            let hash: PoseidonHash =
-                hex!("0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f");
+                setup_and_create_deposit(&mut contract, &before);
 
-            ink_env::test::set_caller::<Environment>(accounts.alice);
-            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(deposit_size);
-            let res = slushie.deposit(hash);
-            assert!(res.is_ok());
+                let after_deposit = Context::new(&contract);
+                //assert_ne!(before.alice_balance, after_deposit.alice_balance);
 
-            let resulting_root_hash = slushie.get_root_hash();
+                let res = contract.withdraw(before.hash1, after_deposit.root_hash);
+                assert!(res.is_ok());
 
-            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(deposit_size);
-            let res = slushie.withdraw(hash, resulting_root_hash);
-            assert!(res.is_ok());
-        }
+                let after_withdrawal = Context::new(&contract);
 
-        /// - can withdraw funds with a proper deposit_size and hash by different account
-        #[ink::test]
-        fn withdraw_from_different_account_works() {
-            let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
-            let deposit_size = 13;
-            let mut slushie: Slushie = Slushie::new(deposit_size);
-            let hash: PoseidonHash =
-                hex!("0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f");
+                //FIXME: contract balance doesn't changes
+                //assert_ne!(after_deposit.contract_balance, after_withdrawal.contract_balance);
 
-            ink_env::test::set_caller::<Environment>(accounts.alice);
-            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(deposit_size);
-            let res = slushie.deposit(hash);
-            assert!(res.is_ok());
+                assert_ne!(after_deposit.alice_balance, after_withdrawal.alice_balance);
 
-            let resulting_root_hash = slushie.get_root_hash();
+                let emitted_events = ink_env::test::recorded_events().collect::<Vec<_>>();
+                assert_eq!(emitted_events.len(), 2); // Desposited and Withdrawn events!
+                assert_withdrawn_event(&emitted_events[1]);
+            }
 
-            ink_env::test::set_caller::<Environment>(accounts.eve);
-            let res = slushie.withdraw(hash, resulting_root_hash);
-            assert!(res.is_ok());
-        }
+            /// - can withdraw funds with a proper deposit_size and hash by different account
+            #[ink::test]
+            fn different_account_works() {
+                let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
+                let before = Context::new(&contract);
 
-        /// - can't withdraw funds with invalid root hash
-        #[ink::test]
-        fn withdraw_with_invalid_root_fails() {
-            let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
-            let deposit_size = 13;
-            let mut slushie: Slushie = Slushie::new(deposit_size);
-            let hash: PoseidonHash =
-                hex!("0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f");
+                setup_and_create_deposit(&mut contract, &before);
 
-            ink_env::test::set_caller::<Environment>(accounts.alice);
-            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(deposit_size);
-            let res = slushie.deposit(hash);
-            assert!(res.is_ok());
+                let after = Context::new(&contract);
 
-            let invalid_root_hash: PoseidonHash =
-                hex!("0000000000000000 0000000000000000 0001020304050607 08090a0b0c0d0e0f");
+                ink_env::test::set_caller::<Environment>(before.accounts.eve);
+                let res = contract.withdraw(before.hash1, after.root_hash);
+                assert!(res.is_ok());
 
-            let res = slushie.withdraw(hash, invalid_root_hash);
-            assert_eq!(res.unwrap_err(), Error::UnknownRoot);
-        }
+                let after_eve_withdrawal = Context::new(&contract);
 
-        /// - can't double withdraw funds with a proper deposit_size and a valid hash
-        #[ink::test]
-        fn withdraw_with_used_nullifier_fails() {
-            let accounts = ink_env::test::default_accounts::<ink_env::DefaultEnvironment>();
-            let deposit_size = 13;
-            let mut slushie: Slushie = Slushie::new(deposit_size);
-            let hash: PoseidonHash =
-                hex!("0001020304050607 08090a0b0c0d0e0f 0001020304050607 08090a0b0c0d0e0f");
+                assert_ne!(before.eve_balance, after_eve_withdrawal.eve_balance);
 
-            ink_env::test::set_caller::<Environment>(accounts.alice);
-            ink_env::test::set_value_transferred::<ink_env::DefaultEnvironment>(deposit_size);
-            let res = slushie.deposit(hash);
-            assert!(res.is_ok());
-            let resulting_root_hash = slushie.get_root_hash();
+                let emitted_events = ink_env::test::recorded_events().collect::<Vec<_>>();
+                assert_eq!(emitted_events.len(), 2); // Desposited and Withdrawn events!
+                assert_withdrawn_event(&emitted_events[1]);
+            }
 
-            let res = slushie.withdraw(hash, resulting_root_hash);
-            assert!(res.is_ok());
+            /// - can't withdraw funds with invalid root hash
+            #[ink::test]
+            fn invalid_root_fails() {
+                let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
+                let before = Context::new(&contract);
 
-            let res = slushie.withdraw(hash, resulting_root_hash);
-            assert_eq!(res.unwrap_err(), Error::NullifierAlreadyUsed);
+                setup_and_create_deposit(&mut contract, &before);
+
+                let invalid_root_hash: PoseidonHash =
+                    hex!("0000000000000000 0000000000000000 0001020304050607 08090a0b0c0d0e0f");
+
+                let res = contract.withdraw(before.hash1, invalid_root_hash);
+                assert_eq!(res.unwrap_err(), Error::UnknownRoot);
+            }
+
+            /// - can't double withdraw funds with a proper deposit_size and a valid hash
+            #[ink::test]
+            fn used_nullifier_fails() {
+                let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
+                let before = Context::new(&contract);
+
+                setup_and_create_deposit(&mut contract, &before);
+
+                let after = Context::new(&contract);
+
+                let res = contract.withdraw(before.hash1, after.root_hash);
+                assert!(res.is_ok());
+
+                let res = contract.withdraw(before.hash1, after.root_hash);
+                assert_eq!(res.unwrap_err(), Error::NullifierAlreadyUsed);
+            }
+
+            /// - can't withdraw funds infinitelly
+            #[ink::test]
+            fn infinite_times_fails() {
+                let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
+                let before = Context::new(&contract);
+
+                setup_and_create_deposit(&mut contract, &before);
+
+                let after_deposit = Context::new(&contract);
+
+                // FIXME: user account balance doesn't change
+                //assert_ne!(before.alice_balance, after.alice_balance);
+
+                let res = contract.withdraw(before.hash1, after_deposit.root_hash);
+                assert!(res.is_ok());
+
+                // FIXME: currently the contract balance does not change
+                //assert_ne!(before.contract_balance, after.contract_balance);
+
+                let after_withdrawal = Context::new(&contract);
+
+                assert_ne!(after_deposit.alice_balance, after_withdrawal.alice_balance);
+
+                let res = contract.withdraw(before.hash2, after_withdrawal.root_hash);
+                assert!(res.is_ok());
+
+                let after_withdrawal2 = Context::new(&contract);
+
+                assert_ne!(
+                    after_withdrawal2.alice_balance,
+                    after_withdrawal.alice_balance
+                );
+
+                let res = contract.withdraw(before.hash3, after_withdrawal2.root_hash);
+                assert!(res.is_ok());
+                let after_withdrawal3 = Context::new(&contract);
+                assert_ne!(
+                    after_withdrawal3.alice_balance,
+                    after_withdrawal2.alice_balance
+                );
+
+                // FIXME: currently the contract balance does not change
+                //assert_eq!(before.contract_balance, after_withdrawal.contract_balance);
+            }
+
+            /// - can't withdraw funds with a valid root hash but invalid nullifier
+            #[ink::test]
+            #[ignore] // FIXME: As for now this test fails. Should be fixed in the 3rd milestone
+            fn invalid_unused_nullifier_fails() {
+                let mut contract: Slushie = Slushie::new(DEFAULT_DEPOSIT_SIZE);
+                let before = Context::new(&contract);
+
+                setup_and_create_deposit(&mut contract, &before);
+
+                let after_deposit = Context::new(&contract);
+
+                let res = contract.withdraw(before.hash1, after_deposit.root_hash);
+                assert!(res.is_ok());
+
+                let res = contract.withdraw(
+                    before.hash2, // invalid hash
+                    after_deposit.root_hash,
+                ); // valid root
+                assert_eq!(res.unwrap_err(), Error::UnknownNullifier);
+            }
         }
     }
 }
