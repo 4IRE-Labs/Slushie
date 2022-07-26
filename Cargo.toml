@@ -1,0 +1,2 @@
+[workspace]
+members = ["plonk_prover_tool", "plonk_prover", "slushie"]

@@ -6,8 +6,5 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-# [workspace]
-# members = ["plonk_prover"]
-
 [dependencies]
-plonk_prover = { path = "plonk_prover" }
+plonk_prover = { path = "../plonk_prover" }
